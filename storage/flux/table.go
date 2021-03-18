@@ -211,14 +211,19 @@ func (t *table) readTags(tags models.Tags) {
 	}
 }
 
-// appendTags fills the colBufs for the tag columns with the tag value.
-func (t *table) appendTags(cr *colReader) {
+// appendTheseTags fills the colBufs for the tag columns with the given tag values.
+func (t *table) appendTheseTags(cr *colReader, tags [][]byte) {
 	for j := range t.cols {
-		v := t.tags[j]
+		v := tags[j]
 		if v != nil {
 			cr.cols[j] = t.cache.GetTag(string(v), cr.l, t.alloc)
 		}
 	}
+}
+
+// appendTags fills the colBufs for the tag columns with the tag values from the table structure.
+func (t *table) appendTags(cr *colReader) {
+	t.appendTheseTags(cr, t.tags)
 }
 
 // appendBounds fills the colBufs for the time bounds
