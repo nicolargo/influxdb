@@ -3,6 +3,16 @@ orbs:
   aws-s3: circleci/aws-s3@2.0.0
 
 jobs:
+  export_vars:
+    machine:
+      enabled: true
+      docker_layer_caching: true
+    steps:
+      - run:
+          name: Set go version
+          command: |
+            echo "export GO_VERSION=$(grep -r '^go ' go.mod | cut -d ' ' -f2)" >> $BASH_ENV
+            source $BASH_ENV
   build_binaries:
     machine:
       enabled: true
@@ -69,6 +79,45 @@ jobs:
                   --aws-region us-east-1
                 from: 'oss-packages'
                 to: 's3://dl.influxdata.com/influxdb/releases'
+  changelog:
+    docker:
+      - image: jsternberg/changelog:latest
+    steps:
+      - run:
+          name: changelog-magic
+          command: |
+            set -ex
+            if [ -n << pipeline.git.base_revision >> ]; then
+              sh "git changelog << pipeline.git.base_revision >>"
+            else
+              sh "git changelog"
+            fi
+
+            if ! git diff --quiet; then
+              git config remote.origin.pushurl git@github.com:influxdata/influxdb.git
+              git commit -am 'Update changelog'
+              git push origin HEAD:${CIRCLE_BRANCH}
+            fi
+  check_64:
+    docker:
+      - image: golang:{{ .Environment.GO_VERSION }}
+    steps:
+      - run:
+          name: 64 Bit
+          command: |
+            GOCACHE=/tmp
+            go mod download
+            go test -parallel=1 ./...
+  check_32:
+    docker:
+      - image: i386/golang:{{ .Environment.GO_VERSION }}
+    steps:
+      - run:
+          name: 32 Bit
+          command: |
+            GOCACHE=/tmp
+            go mod download
+            go test -parallel=1 ./...
   #build_container:
   #build_image:
   #register_image:
@@ -81,7 +130,7 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Execute test
+          name: Check OSS release candidacy
           command: |
             echo "TODO: Run checks to determine if this build is a release candidate"
             ls ./
@@ -107,11 +156,22 @@ workflows:
   version: 2.1
   on_push:
     jobs:
-      - test
+      - export_vars
       - build_binaries
+      - changelog:
+          filters:
+            branches:
+              only: /^1(.\d+)*$/
+      - check_32:
+          requires:
+            - export_vars
+      - check_64:
+          requires:
+            - export_vars
       - oss_release_candidate:
           requires:
             - build_binaries
+      - test
   daily:
     triggers:
       - schedule:
