@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/influxdata/flux"
+	"github.com/influxdata/flux/dependencies/testing"
 	"github.com/influxdata/influxdb"
 	"github.com/influxdata/influxdb/coordinator"
 	influxdb2 "github.com/influxdata/influxdb/flux/stdlib/influxdata/influxdb"
@@ -314,7 +315,11 @@ func (s *Server) appendHTTPDService(c httpd.Config) error {
 		if err != nil {
 			return err
 		}
-		srv.Handler.Controller, err = control.New(s.config.FluxController, s.Logger.With(zap.String("service", "flux-controller")), []flux.Dependency{storageDep})
+		srv.Handler.Controller, err = control.New(
+			s.config.FluxController,
+			s.Logger.With(zap.String("service", "flux-controller")),
+			[]flux.Dependency{storageDep, testing.FrameworkConfig{}},
+		)
 		if err != nil {
 			return err
 		}
